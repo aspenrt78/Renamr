@@ -189,12 +189,12 @@ const TV = {
       const uniqueNames = [...new Set(results.map(r => r.title.toLowerCase()))];
       if (uniqueNames.length > 1) {
         // Show selection for the group
-        this._searchResults = results;
         const firstFile = groupFiles[0];
         const idx = this.files.indexOf(firstFile);
         this._pendingGroupFiles = groupFiles;
-        this._showTvSelectionDialog(idx, results, seriesName);
-        return; // Wait for user selection
+        await this._showTvSelectionDialog(idx, results, seriesName);
+        this._pendingGroupFiles = null;
+        continue;
       }
 
       await this._applyShowToGroup(show, groupFiles);
@@ -229,6 +229,7 @@ const TV = {
   },
 
   _showTvSelectionDialog(fileIndex, results, query) {
+    return queueMatchPrompt(() => {
     const file = this.files[fileIndex];
     this._searchResults = results;
 
@@ -262,6 +263,7 @@ const TV = {
       <div class="modal-results" id="tv-search-results">${resultsHTML}</div>
     `);
     setTimeout(() => { const el = document.getElementById('tv-search-input'); el?.focus(); el?.addEventListener('keydown', e => { if (e.key === 'Enter') TV.doSearch(fileIndex); }); }, 80);
+    });
   },
 
   async updateNewName(file) {

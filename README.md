@@ -79,17 +79,23 @@ Or just double-click `START.bat` on Windows — it handles everything.
 5. Review the proposed names in the preview
 6. Choose a file operation in Settings, then click the operation button to build the organized library
 
-> **Link behavior:** Local hard links require the source and output to be on the same filesystem. Symbolic links can cross filesystems but may require Windows Developer Mode. For RaiDrive/FTP-backed TrueNAS storage, SSH Hard Link mode maps the Windows path to its TrueNAS `/mnt/...` path and runs `ln` directly on the server using SSH key or agent authentication.
+> **Link behavior:** Local hard links require the source and output to be on the same filesystem. Symbolic links can cross filesystems but may require Windows Developer Mode. SSH Hard Link mode browses files and creates links directly on your server, without downloading the media.
 
 ### SSH hard links on TrueNAS SCALE / Linux
 
-Select **SSH Hard Link** under **Settings → File Operation**. Enter an SSH host (`user@server` or an SSH config alias), port, optional OpenSSH private-key path, and matching local/server roots. For example, `R:\Media` can map to `/mnt/pool/media`; both source and destination must be underneath that mapping and on the same server filesystem (the same ZFS dataset on TrueNAS).
+Select **SSH Hard Link** under **Settings → File Operation**. Enter and save an SSH host (`user@server` or an SSH config alias), port, and optional OpenSSH private-key path. **Add Folder**, **Add Files**, and the output-folder chooser now browse the server directly. Choose your import and output folders normally; no drive mapping is required. Both source and destination must be on the same server filesystem (the same ZFS dataset on TrueNAS).
 
-Before using **Test Connection**, establish a connection with your system SSH client, verify the server fingerprint, and authorize your public key on the server. Renamr requires an already trusted host and key/agent authentication; it does not collect passwords or accept unknown host keys. The connection test checks the remote directory, write access, and availability of `ln` without creating files.
+For users who prefer importing through a mounted drive, **Advanced: mounted-drive mapping** optionally maps a local root such as `R:\Media` to `/mnt/pool/media`. Only mounted-drive paths need this mapping; direct server paths do not.
 
-SSH mode requires Linux/GNU `ln` with `-T` support, as provided by TrueNAS SCALE. It refuses existing destinations and records the connection used for undo. Other SSH server platforms, including TrueNAS CORE, are not currently supported by this mode.
+Before using **Test Connection**, establish a connection with your system SSH client, verify the server fingerprint, and authorize your public key on the server. Renamr requires an already trusted host and key/agent authentication; it does not collect passwords or accept unknown host keys. The connection test checks command availability and any configured mapping directory without creating files. Output permissions are checked when creating links.
+
+SSH mode requires Linux/GNU `ln` with `-T` support and GNU `find`, as provided by TrueNAS SCALE. It refuses existing destinations and records the connection used for undo. Other SSH server platforms, including TrueNAS CORE, are not currently supported by this mode. Remote metadata matching uses filenames/folder names: local media probing, embedded tag editing, and ZIP inspection are not available for direct server paths.
 
 Links share file contents: editing a linked file can change the data used by the torrent client. Keep seeding files read-only. Symbolic links also depend on the original path continuing to exist.
+
+### Unmatched items
+
+Use **Export Unmatched CSV** in Organize to save original filenames, paths, search titles, media types, and statuses for items with no match. Matched items with file-operation errors are excluded. Audiobooks using filename/tag fallback after no metadata results are included. CSV exports support Unicode and escape spreadsheet formulas.
 
 ### ROM-Specific Workflow
 

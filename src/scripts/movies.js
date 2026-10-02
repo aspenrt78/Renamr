@@ -169,7 +169,7 @@ const Movies = {
       // Ambiguous — show selection
       file.status = 'pending';
       this.render();
-      this._showSelectionDialog(this.files.indexOf(file), results, query);
+      await this._showSelectionDialog(this.files.indexOf(file), results, query);
     }
   },
 
@@ -197,6 +197,7 @@ const Movies = {
 
   // ── Selection Dialog ────────────────────────────────────────────
   _showSelectionDialog(fileIndex, results, query) {
+    return queueMatchPrompt(() => {
     this._searchResults = results;
     const file = this.files[fileIndex];
 
@@ -218,6 +219,7 @@ const Movies = {
       el?.focus();
       el?.addEventListener('keydown', e => { if (e.key === 'Enter') Movies.doSearch(fileIndex); });
     }, 80);
+    });
   },
 
   showSearch(index) {

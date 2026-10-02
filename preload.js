@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('api', {
   organizeFiles: (ops) => ipcRenderer.invoke('files:organize', ops),
   undoRename: (ops) => ipcRenderer.invoke('files:undo', ops),
   testSsh: () => ipcRenderer.invoke('ssh:test'),
+  browseSsh: (directory) => ipcRenderer.invoke('ssh:browse', directory),
+  exportUnmatched: (rows) => ipcRenderer.invoke('files:exportUnmatched', rows),
   showInFolder: (path) => ipcRenderer.invoke('shell:showInFolder', path),
 
   // TMDB

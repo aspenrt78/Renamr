@@ -9,11 +9,16 @@ const Settings = {
     move: { button: 'Rename & Move', done: 'Moved', status: 'done', help: 'Renames or moves files using the existing behavior.' },
     hardlink: { button: 'Create Hard Links', done: 'Linked', status: 'linked', help: 'Uses no duplicate file data, but source and output must be on the same filesystem.' },
     symlink: { button: 'Create Symbolic Links', done: 'Linked', status: 'linked', help: 'Can cross filesystems. Windows may require Developer Mode or administrator privileges.' },
-    'ssh-hardlink': { button: 'Create SSH Links', done: 'Linked', status: 'linked', help: 'Creates hard links directly on TrueNAS over SSH without transferring movie data.' }
+    'ssh-hardlink': { button: 'Create SSH Links', done: 'Linked', status: 'linked', help: 'Creates hard links directly on a Linux SSH server without transferring media data.' }
   },
 
   completedVerb() { return (this._operationMeta[this.operationMode] || this._operationMeta.move).done; },
   doneLabel() { return (this._operationMeta[this.operationMode] || this._operationMeta.move).status; },
+  chooseDirectory() { return this.operationMode === 'ssh-hardlink' ? RemoteBrowser.choose() : api.openDirectory(); },
+  clearSshMapping() {
+    document.getElementById('settings-ssh-local-root').value = '';
+    document.getElementById('settings-ssh-remote-root').value = '';
+  },
 
   async init() {
     const tmdbKey = await api.getStore('tmdbApiKey') || '';
@@ -123,6 +128,20 @@ const Settings = {
       sshLocalRoot: document.getElementById('settings-ssh-local-root').value.trim(),
       sshRemoteRoot: document.getElementById('settings-ssh-remote-root').value.trim()
     };
+    const previousHost = await api.getStore('sshHost');
+    if (previousHost && previousHost !== values.sshHost) {
+      Organize.clear();
+        Batch.sourceDir = ''; Batch.destDir = ''; Batch.pendingOps = [];
+        document.getElementById('batch-source').value = '';
+        document.getElementById('batch-dest').value = '';
+        RemoteBrowser.directory = 'ssh:/';
+        for (const { key, elId } of Object.values(this._outputDirMeta)) {
+          if ((await api.getStore(key))?.startsWith('ssh:/')) {
+            await api.setStore(key, '');
+            document.getElementById(elId).value = '';
+          }
+        }
+    }
     for (const [key, value] of Object.entries(values)) await api.setStore(key, value);
     if (showConfirmation) showToast('SSH settings saved', 'success');
   },
@@ -239,7 +258,7 @@ const Settings = {
 
   async selectOutputDir(type = 'global') {
     const { key, elId, label } = this._outputDirMeta[type] || this._outputDirMeta.global;
-    const dir = await api.openDirectory();
+    const dir = await this.chooseDirectory();
     if (dir) {
       document.getElementById(elId).value = dir;
       await api.setStore(key, dir);

@@ -18,6 +18,32 @@ const TV_PATTERNS = [
 ];
 
 const Organize = {
+  unmatchedRows() {
+    const rows = [];
+    const add = (type, file, title, status = 'No match found') => rows.push({
+      media_type: type, original_filename: file.name, original_path: file.path,
+      search_title: title || '', status
+    });
+    for (const [type, module] of [['Movie', Movies], ['TV', TV], ['ROM', Roms]]) {
+      for (const file of module.files) {
+        if (file.status === 'error' && !file.match) add(type, file, file.cleanTitle || file.parsed?.title || file.parsed?.series);
+      }
+    }
+    for (const book of Audiobooks.books) {
+      if (book.noMetadataMatch || (!book.matched && book.status === 'error')) {
+        for (const file of book.files) add('Audiobook', file, book.title,
+          book.noMetadataMatch ? 'No metadata match found (using filename/tag fallback)' : 'No match found');
+      }
+    }
+    return rows;
+  },
+
+  async exportUnmatched() {
+    const rows = this.unmatchedRows();
+    if (!rows.length) { showToast('No unmatched items to export', 'error'); return; }
+    const result = await api.exportUnmatched(rows);
+    if (result.error) showToast(`CSV export failed: ${result.error}`, 'error');
+  },
   // ── File type detection ──────────────────────────────────────
   detectType(filePath) {
     const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
@@ -49,6 +75,11 @@ const Organize = {
 
   // ── Add Files (dialog) ───────────────────────────────────────
   async addFiles() {
+    if (Settings.operationMode === 'ssh-hardlink') {
+      const paths = await RemoteBrowser.choose('files');
+      if (paths?.length) await this.handleDrop(paths);
+      return;
+    }
     const paths = await api.openFiles([
       { name: 'All Media & ROM Files', extensions: ['mkv','mp4','avi','mov','wmv','flv','m4v','webm','ts','mpg','mpeg','mp3','m4a','m4b','flac','ogg','wma','aac','opus','wav','nes','snes','n64','z64','v64','gba','gbc','gb','nds','3ds','iso','cso','chd','rvz','gcz','wbfs','wad','cia','cci','xci','nsp','nsz','pce','md','smd','gen','gg','32x','sfc','smc','fig','a26','a52','a78','lnx','ngp','ngc','ws','wsc','psx','pbp','cdi','nrg','img','bin','cue','zip'] },
       { name: 'All Files', extensions: ['*'] }
@@ -59,9 +90,11 @@ const Organize = {
 
   // ── Add Folder (dialog) ──────────────────────────────────────
   async addFolder() {
-    const dir = await api.openDirectory();
+    const dir = await Settings.chooseDirectory();
     if (!dir) return;
-    const scanned = await api.scanFiles(dir, 'all');
+    let scanned;
+    try { scanned = await api.scanFiles(dir, 'all'); }
+    catch (err) { showToast(`Unable to scan folder: ${err.message}`, 'error'); return; }
     if (scanned && scanned.length > 0) {
       await this.handleDrop(scanned.map(f => f.path));
     }
@@ -83,6 +116,7 @@ const Organize = {
   _cancelMatch: false,
 
   _setMatching(active) {
+    this._matching = active;
     const matchBtn     = document.getElementById('organize-match-btn');
     const stopBtn      = document.getElementById('organize-stop-btn');
     const modalStopBtn = document.getElementById('modal-stop-btn');
@@ -97,26 +131,34 @@ const Organize = {
 
   // ── Match all loaded types ───────────────────────────────────
   async matchAll(source) {
+    if (this._matching) return;
     this._cancelMatch = false;
     this._setMatching(true);
-    if (Movies.files.length > 0) await Movies.matchAll(source === 'all' ? 'all' : undefined);
-    if (!this._cancelMatch && TV.files.length > 0) await TV.matchAll(source === 'all' ? 'all' : undefined);
-    if (!this._cancelMatch && Audiobooks.files.length > 0) await Audiobooks.matchAll(source === 'all' ? 'all' : undefined);
-    if (!this._cancelMatch && Roms.files.length > 0) await Roms.matchAll();
-    this._setMatching(false);
-    this.updateUI();
+    try {
+      if (Movies.files.length > 0) await Movies.matchAll(source === 'all' ? 'all' : undefined);
+      if (!this._cancelMatch && TV.files.length > 0) await TV.matchAll(source === 'all' ? 'all' : undefined);
+      if (!this._cancelMatch && Audiobooks.files.length > 0) await Audiobooks.matchAll(source === 'all' ? 'all' : undefined);
+      if (!this._cancelMatch && Roms.files.length > 0) await Roms.matchAll();
+    } finally {
+      this._setMatching(false);
+      this.updateUI();
+    }
   },
 
   // ── Match a specific type with source ────────────────────────
   async matchType(type, source) {
+    if (this._matching) return;
     this._cancelMatch = false;
     this._setMatching(true);
-    if (type === 'movies' && Movies.files.length > 0) await Movies.matchAll(source);
-    if (!this._cancelMatch && type === 'tv' && TV.files.length > 0) await TV.matchAll(source);
-    if (!this._cancelMatch && type === 'audiobooks' && Audiobooks.files.length > 0) await Audiobooks.matchAll(source);
-    if (!this._cancelMatch && type === 'roms' && Roms.files.length > 0) await Roms.matchAll(source);
-    this._setMatching(false);
-    this.updateUI();
+    try {
+      if (type === 'movies' && Movies.files.length > 0) await Movies.matchAll(source);
+      if (!this._cancelMatch && type === 'tv' && TV.files.length > 0) await TV.matchAll(source);
+      if (!this._cancelMatch && type === 'audiobooks' && Audiobooks.files.length > 0) await Audiobooks.matchAll(source);
+      if (!this._cancelMatch && type === 'roms' && Roms.files.length > 0) await Roms.matchAll(source);
+    } finally {
+      this._setMatching(false);
+      this.updateUI();
+    }
   },
 
   // ── Rename all ───────────────────────────────────────────────
@@ -201,6 +243,8 @@ const Organize = {
 
   // ── Update unified UI state ──────────────────────────────────
   updateUI() {
+    const exportButton = document.getElementById('organize-export-unmatched');
+    if (exportButton) exportButton.disabled = this.unmatchedRows().length === 0;
     const totalFiles = Movies.files.length + TV.files.length + Audiobooks.files.length + Roms.files.length;
     const empty = document.getElementById('organize-empty');
     const panels = document.getElementById('organize-panels');

@@ -72,6 +72,7 @@
             <button class="btn btn-ghost" onclick="Organize.clear()" id="organize-clear-btn" style="display:none">✕ Clear</button>
             <button class="btn btn-secondary" onclick="Organize.addFiles()">Add Files</button>
             <button class="btn btn-secondary" onclick="Organize.addFolder()">Add Folder</button>
+            <button class="btn btn-secondary" onclick="Organize.exportUnmatched()" id="organize-export-unmatched" disabled>Export Unmatched CSV</button>
           </div>
         </div>
         <div class="rename-workspace" id="organize-workspace">
@@ -425,12 +426,15 @@
 
           <div class="config-card" id="settings-ssh-card" style="display:none;">
             <h3>SSH Hard Links</h3>
-            <p class="setting-desc">Uses your system SSH client and key/agent authentication. Renamr does not store a NAS password.</p>
+            <p class="setting-desc">Connect to your server, then use Add Folder and Output Directories to browse its folders directly. Uses SSH key/agent authentication.</p>
             <div style="display:flex;flex-direction:column;gap:10px;">
               <div class="input-row"><input type="text" id="settings-ssh-host" class="input" placeholder="user@truenas or SSH config alias" /><input type="number" id="settings-ssh-port" class="input" value="22" min="1" max="65535" style="max-width:90px;" /></div>
               <div class="input-row"><input type="text" id="settings-ssh-identity" class="input" placeholder="Private key path (optional; uses SSH agent/config by default)" readonly /><button class="btn btn-secondary" onclick="Settings.selectSshIdentity()">Browse</button><button class="btn btn-secondary" onclick="Settings.clearSshIdentity()">Clear</button></div>
-              <div><div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">Windows/RaiDrive root</div><div class="input-row"><input type="text" id="settings-ssh-local-root" class="input" placeholder="R:\Movies" readonly /><button class="btn btn-secondary" onclick="Settings.selectSshLocalRoot()">Browse</button></div></div>
-              <div><div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">Matching TrueNAS root</div><input type="text" id="settings-ssh-remote-root" class="input" placeholder="/mnt/tank/media/Movies" /></div>
+              <details><summary>Advanced: use an existing mounted drive</summary>
+                <p class="setting-desc" style="margin-top:8px;">Optional path translation for files imported from a mounted drive. Leave blank when browsing the server directly.</p>
+                <div class="input-row"><input type="text" id="settings-ssh-local-root" class="input" placeholder="Mounted folder (optional)" readonly /><button class="btn btn-secondary" onclick="Settings.selectSshLocalRoot()">Browse</button><button class="btn btn-secondary" onclick="Settings.clearSshMapping()">Clear</button></div>
+                <input type="text" id="settings-ssh-remote-root" class="input" placeholder="Matching server folder (optional)" style="margin-top:8px;" />
+              </details>
               <div class="input-row"><button class="btn btn-primary" onclick="Settings.saveSshSettings()">Save SSH Settings</button><button class="btn btn-secondary" onclick="Settings.testSshConnection()">Test Connection</button></div>
               <div id="ssh-connection-status" class="key-status"></div>
             </div>
@@ -528,6 +532,7 @@
   </div>
 
   <script src="scripts/utils.js"></script>
+  <script src="scripts/remote-browser.js"></script>
   <script src="scripts/format-engine.js"></script>
   <script src="scripts/movies.js"></script>
   <script src="scripts/tv.js"></script>

@@ -7,12 +7,14 @@ const fastGlob = require('fast-glob');
 const axios = require('axios');
 const AdmZip = require('adm-zip');
 const Store = require('electron-store');
+const { unmatchedCsv } = require('./unmatched-csv');
 const {
   createLocalLink,
   undoLocalLink,
   testSshConnection,
   createSshHardLink,
-  undoSshHardLink
+  undoSshHardLink,
+  listRemoteDirectory
 } = require('./file-operations');
 
 const store = new Store({
@@ -51,6 +53,34 @@ const store = new Store({
 });
 
 let mainWindow;
+
+ipcMain.handle('files:exportUnmatched', async (_, rows) => {
+  if (!Array.isArray(rows) || !rows.length) return { error: 'No unmatched items to export' };
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Unmatched Items', defaultPath: 'renamr-unmatched.csv',
+    filters: [{ name: 'CSV', extensions: ['csv'] }]
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  try {
+    await fs.promises.writeFile(result.filePath, unmatchedCsv(rows), 'utf8');
+    return { success: true, count: rows.length };
+  } catch (err) { return { error: err.message }; }
+});
+
+function getSshConfig() {
+  return {
+    host: store.get('sshHost') || '', port: store.get('sshPort') || 22,
+    identityFile: store.get('sshIdentityFile') || '',
+    localRoot: store.get('sshLocalRoot') || '', remoteRoot: store.get('sshRemoteRoot') || ''
+  };
+}
+
+ipcMain.handle('ssh:browse', async (_, directory = 'ssh:/') => {
+  try {
+    const entries = await listRemoteDirectory(directory, getSshConfig());
+    return { entries };
+  } catch (err) { return { error: err.message }; }
+});
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -137,6 +167,10 @@ ipcMain.handle('files:scan', async (_, dirPath, mediaType) => {
   };
 
   const exts = extensions[mediaType] || extensions.all;
+  if (dirPath.startsWith('ssh:/')) {
+    const entries = await listRemoteDirectory(dirPath, getSshConfig(), true);
+    return entries.filter(entry => !entry.isDirectory && exts.includes(entry.ext.slice(1)));
+  }
   const pattern = `**/*.{${exts.join(',')}}`;
 
   try {
@@ -168,6 +202,7 @@ ipcMain.handle('files:scan', async (_, dirPath, mediaType) => {
 
 // ── Audio Metadata Reader ────────────────────────────────────────
 ipcMain.handle('files:readAudioMeta', async (_, filePath) => {
+  if (filePath.startsWith('ssh:/')) return null;
   try {
     const mm = require('music-metadata');
     const metadata = await mm.parseFile(filePath);
@@ -544,6 +579,7 @@ ipcMain.handle('ia:search', async (_, query, platformShort) => {
 
 // ── Video File Probe (via bundled ffprobe) ───────────────────────
 ipcMain.handle('files:probeVideo', async (_, filePath) => {
+  if (filePath.startsWith('ssh:/')) return null;
   try {
     const { execFile } = require('child_process');
     const util = require('util');
@@ -852,6 +888,9 @@ function extractSeriesFromGoogleBook(volumeInfo) {
 ipcMain.handle('files:organize', async (_, operations) => {
   const results = [];
   const mode = store.get('fileOperationMode') || 'move';
+  if (mode !== 'ssh-hardlink' && operations.some(op => op.oldPath?.startsWith('ssh:/') || op.newPath?.startsWith('ssh:/'))) {
+    return operations.map(op => ({ source: op.oldPath, target: op.newPath, success: false, error: 'Server files require SSH Hard Link mode' }));
+  }
   if (mode === 'move') return moveFiles(operations);
 
   const sshConfig = {
@@ -1393,6 +1432,7 @@ async function downloadCoverToTemp(url) {
 
 // ── Embed metadata into a single audio file ─────────────────────
 ipcMain.handle('books:embedTags', async (_, filePath, metadata, coverPath) => {
+  if (filePath.startsWith('ssh:/')) return { success: false, error: 'Tag embedding is available for local files only' };
   try {
     const ext = path.extname(filePath).toLowerCase();
     const tmpOutput = filePath + '.tmp' + ext;

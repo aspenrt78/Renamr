@@ -10,7 +10,9 @@ const {
   shellQuote,
   createSshHardLink,
   undoSshHardLink,
-  testSshConnection
+  testSshConnection,
+  parseRemoteEntries,
+  listRemoteDirectory
 } = require('../file-operations');
 
 async function withTempDir(callback) {
@@ -145,6 +147,28 @@ test('SSH connection test verifies the configured remote root and ln command', a
   const config = { host: 'media@truenas', port: 22, localRoot: 'R:\\Movies', remoteRoot: '/mnt/tank/Movies' };
   assert.equal(await testSshConnection(config, runner), true);
   assert.match(calls[0].args.at(-1), /test -d/);
-  assert.match(calls[0].args.at(-1), /test -w/);
+  assert.match(calls[0].args.at(-1), /command -v find/);
   assert.match(calls[0].args.at(-1), /command -v ln/);
+});
+
+test('direct SSH sources and destinations do not require mounted-drive mappings', async () => {
+  const calls = [];
+  const config = { host: 'user@server' };
+  const runner = async (command, args) => { calls.push(args.at(-1)); return { stdout: 'Renamr-SSH-OK' }; };
+  assert.equal(await testSshConnection(config, runner), true);
+  const result = await createSshHardLink('ssh:/downloads/Movie.mkv', 'ssh:/library/Movie (2026).mkv', config, runner);
+  assert.equal(result.remoteSource, '/downloads/Movie.mkv');
+  assert.equal(result.remoteTarget, '/library/Movie (2026).mkv');
+  assert.match(calls[1], /ln -T/);
+});
+
+test('server listings preserve filenames with whitespace, quotes and newlines', async () => {
+  const name = "/downloads/Bob's Movie\nPart 1.mkv";
+  const listing = ['f', name, '123', '1700000000', 'd', '/downloads/Season 1', '4096', '1700000000', ''].join('\0');
+  const entries = parseRemoteEntries(listing);
+  assert.equal(entries[0].name, "Bob's Movie\nPart 1.mkv");
+  assert.equal(entries[0].path, 'ssh:' + name);
+  assert.equal(entries[1].isDirectory, true);
+  await assert.rejects(listRemoteDirectory('C:\\local', { host: 'server' }), /Choose a folder/);
+  assert.throws(() => parseRemoteEntries('f\0unfinished'), /Incomplete/);
 });

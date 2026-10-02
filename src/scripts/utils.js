@@ -19,6 +19,30 @@ function showModal(title, bodyHTML) {
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
 
+let matchPromptTail = Promise.resolve();
+
+function waitForModalClose() {
+  const overlay = document.getElementById('modal-overlay');
+  if (overlay.classList.contains('hidden')) return Promise.resolve();
+  return new Promise(resolve => {
+    const observer = new MutationObserver(() => {
+      if (overlay.classList.contains('hidden')) { observer.disconnect(); resolve(); }
+    });
+    observer.observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  });
+}
+
+function queueMatchPrompt(open) {
+  const pending = matchPromptTail.then(async () => {
+    await waitForModalClose();
+    if (typeof Organize !== 'undefined' && Organize._cancelMatch) return;
+    open();
+    await waitForModalClose();
+  });
+  matchPromptTail = pending.catch(() => {});
+  return pending;
+}
+
 function hideModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
 }
@@ -69,6 +93,7 @@ function getPathSeparator() {
 }
 
 function joinPath(...parts) {
+  if (parts[0]?.startsWith('ssh:/')) return parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/{2,}/g, '/');
   const sep = getPathSeparator();
   const joined = parts.filter(Boolean).join(sep);
   // Normalize all separators to the OS separator
@@ -88,10 +113,12 @@ function getBaseName(filename) {
 
 // Extract path components
 function pathDirname(filepath) {
+  if (filepath === 'ssh:/') return filepath;
   const sep = filepath.includes('\\') ? '\\' : '/';
   const parts = filepath.split(sep);
   parts.pop();
-  return parts.join(sep);
+  const parent = parts.join(sep);
+  return parent === 'ssh:' ? 'ssh:/' : parent;
 }
 
 function pathBasename(filepath) {

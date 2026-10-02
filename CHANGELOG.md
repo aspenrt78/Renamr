@@ -6,6 +6,9 @@
 
 - Added selectable Rename & Move, Hard Link, Symbolic Link, and SSH Hard Link modes. Rename & Move remains the default.
 - Added server-side hard-link creation for TrueNAS and other SSH-accessible storage, including Windows-to-server path mapping and key/agent authentication.
+- Added direct SSH import/output browsing; mounted-drive mapping is now optional under Advanced settings.
+- Queued ambiguous movie/TV match prompts so later matches cannot replace an unanswered prompt.
+- Added CSV export for unmatched items, including audiobook metadata fallbacks, with Unicode support and spreadsheet-formula protection.
 - Link-aware history undo verifies link identity before removal and never removes the original source file.
 - Added automated tests for local links, safe undo, path mapping, shell quoting, and SSH command construction.
 

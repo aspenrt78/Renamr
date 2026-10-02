@@ -8,7 +8,7 @@ const Batch = {
   pendingOps: [],
 
   async selectSource() {
-    const dir = await api.openDirectory();
+    const dir = await Settings.chooseDirectory();
     if (dir) {
       this.sourceDir = dir;
       document.getElementById('batch-source').value = dir;
@@ -16,7 +16,7 @@ const Batch = {
   },
 
   async selectDest() {
-    const dir = await api.openDirectory();
+    const dir = await Settings.chooseDirectory();
     if (dir) {
       this.destDir = dir;
       document.getElementById('batch-dest').value = dir;
@@ -32,7 +32,9 @@ const Batch = {
     const preview = document.getElementById('batch-preview').checked;
 
     showToast('Scanning files...', 'info');
-    const files = await api.scanFiles(this.sourceDir, 'all');
+    let files;
+    try { files = await api.scanFiles(this.sourceDir, 'all'); }
+    catch (err) { showToast(`Unable to scan folder: ${err.message}`, 'error'); return; }
 
     if (files.length === 0) {
       showToast('No files found in the source directory', 'error');

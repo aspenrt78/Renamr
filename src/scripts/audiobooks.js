@@ -393,6 +393,7 @@ const Audiobooks = {
     }
 
     // No API results — use parsed tag/folder data as-is
+    book.noMetadataMatch = true;
     book.matched = true;
     book.status = 'matched';
 
@@ -454,6 +455,7 @@ const Audiobooks = {
   },
 
   async _applyBookMatch(book, match) {
+    book.noMetadataMatch = false;
     // API data is authoritative — always use it when available
     if (match.title) book.title = match.title;
     if (match.author && match.author !== 'Unknown') book.author = match.author;
@@ -940,6 +942,7 @@ const Audiobooks = {
   refresh() {
     for (const book of this.books) {
       book.matched = false;
+      book.noMetadataMatch = false;
       book.status = 'pending';
     }
     for (const file of this.files) {

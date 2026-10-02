@@ -94,6 +94,38 @@ function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'"'"'`)}'`;
 }
 
+function remotePath(filePath) {
+  if (!filePath.startsWith('ssh:/')) throw new Error('Choose a folder on the SSH server');
+  const value = filePath.slice(4);
+  if (!value.startsWith('/') || value.includes('\0')) throw new Error('Invalid server path');
+  return path.posix.normalize(value);
+}
+
+function parseRemoteEntries(output) {
+  const fields = output.split('\0');
+  if (fields.at(-1) === '') fields.pop();
+  if (fields.length % 4) throw new Error('Incomplete server directory listing');
+  const entries = [];
+  for (let index = 0; index < fields.length; index += 4) {
+    const [type, filePath, size, modified] = fields.slice(index, index + 4);
+    if (type !== 'd' && type !== 'f') continue;
+    entries.push({
+      path: `ssh:${filePath}`, name: path.posix.basename(filePath),
+      dir: `ssh:${path.posix.dirname(filePath)}`, ext: path.posix.extname(filePath).toLowerCase(),
+      isDirectory: type === 'd', size: Number(size), modified: new Date(Number(modified) * 1000).toISOString()
+    });
+  }
+  return entries;
+}
+
+async function listRemoteDirectory(directory, config, recursive = false, runner) {
+  const root = remotePath(directory);
+  const depth = recursive ? '' : '-maxdepth 1';
+  const command = `test -d ${shellQuote(root)} && find -H ${shellQuote(root)} -mindepth 1 ${depth} -name '.*' -prune -o -printf '%y\\0%p\\0%s\\0%T@\\0'`;
+  const result = await runSshCommand(config, command, runner);
+  return parseRemoteEntries(result.stdout);
+}
+
 function validateSshConfig(config) {
   if (!config.host) throw new Error('SSH host is required');
   if (config.host.startsWith('-') || !/^[a-z0-9_.@:-]+$/i.test(config.host)) throw new Error('SSH host contains unsupported characters');
@@ -109,7 +141,7 @@ async function runSshCommand(config, remoteCommand, runner = execFileAsync) {
   args.push(config.host, remoteCommand);
 
   try {
-    return await runner('ssh', args, { windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
+    return await runner('ssh', args, { windowsHide: true, timeout: 30000, maxBuffer: 8 * 1024 * 1024 });
   } catch (err) {
     const detail = String(err.stderr || err.message || '').trim();
     throw new Error(detail || 'SSH command failed');
@@ -117,15 +149,16 @@ async function runSshCommand(config, remoteCommand, runner = execFileAsync) {
 }
 
 async function testSshConnection(config, runner) {
-  if (!config.localRoot || !config.remoteRoot) throw new Error('Both local and TrueNAS path roots are required');
-  const command = `test -d ${shellQuote(config.remoteRoot)} && test -w ${shellQuote(config.remoteRoot)} && command -v ln >/dev/null && printf 'Renamr-SSH-OK'`;
+  const mappingCheck = config.localRoot && config.remoteRoot
+    ? `test -d ${shellQuote(config.remoteRoot)} && ` : '';
+  const command = `${mappingCheck}command -v ln >/dev/null && command -v find >/dev/null && printf 'Renamr-SSH-OK'`;
   const result = await runSshCommand(config, command, runner);
   return String(result.stdout || '').includes('Renamr-SSH-OK');
 }
 
 async function createSshHardLink(source, target, config, runner) {
-  const remoteSource = mapLocalToRemote(source, config.localRoot, config.remoteRoot);
-  const remoteTarget = mapLocalToRemote(target, config.localRoot, config.remoteRoot);
+  const remoteSource = source.startsWith('ssh:/') ? remotePath(source) : mapLocalToRemote(source, config.localRoot, config.remoteRoot);
+  const remoteTarget = target.startsWith('ssh:/') ? remotePath(target) : mapLocalToRemote(target, config.localRoot, config.remoteRoot);
   if (remoteSource === remoteTarget) {
     return { source, target, success: true, operation: 'noop' };
   }
@@ -165,5 +198,8 @@ module.exports = {
   runSshCommand,
   testSshConnection,
   createSshHardLink,
-  undoSshHardLink
+  undoSshHardLink,
+  remotePath,
+  parseRemoteEntries,
+  listRemoteDirectory
 };
