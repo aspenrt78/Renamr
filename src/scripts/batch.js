@@ -127,8 +127,8 @@ const Batch = {
   async execute() {
     if (this.pendingOps.length === 0) return;
 
-    showToast(`Organizing ${this.pendingOps.length} files...`, 'info');
-    const results = await api.renameFiles(this.pendingOps.map(op => ({
+    showToast(`Processing ${this.pendingOps.length} files...`, 'info');
+    const results = await api.organizeFiles(this.pendingOps.map(op => ({
       oldPath: op.oldPath,
       newPath: op.newPath
     })));
@@ -138,7 +138,7 @@ const Batch = {
 
     this.pendingOps = [];
     showToast(
-      `Organized ${success} files${fail > 0 ? `, ${fail} failed` : ''}`,
+      `${Settings.completedVerb()} ${success} files${fail > 0 ? `, ${fail} failed` : ''}`,
       success > 0 ? 'success' : 'error'
     );
   }

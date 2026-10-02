@@ -18,7 +18,7 @@
 
 ---
 
-Rename and organize your **movies**, **TV shows**, **audiobooks**, and **ROMs** with metadata from TMDB, OMDb, OpenLibrary, and IGDB. Drag and drop your files, match them to the correct metadata, customize your naming format, and rename everything in one click.
+Organize your **movies**, **TV shows**, **audiobooks**, and **ROMs** with metadata from TMDB, OMDb, OpenLibrary, and IGDB. Choose traditional rename/move behavior or create cleanly named filesystem links while leaving torrent source files untouched.
 
 ## ✨ Features
 
@@ -34,7 +34,9 @@ Rename and organize your **movies**, **TV shows**, **audiobooks**, and **ROMs** 
 
 **⚙️ Format Editor** — Build custom naming expressions with live preview. Use variables like `{title}`, `{year}`, `{series}`, `{season}`, `{episode}`, `{author}`, `{track}`, `{narrator}`, `{platform}`, `{disc}`, `{contentType}`, `{version}`, and more. Zero-pad numbers with `{season:2}` → `02`.
 
-**📜 History & Undo** — Full history of all rename operations with one-click undo for any batch (with confirmation dialog).
+**🔗 Space-Saving Links** — Choose hard links, symbolic links, or server-side hard links over SSH. Rename & Move remains the default for backward compatibility.
+
+**📜 History & Undo** — Full history of rename and link operations with safe, mode-aware undo (with confirmation dialog).
 
 ## 📥 Installation
 
@@ -75,7 +77,19 @@ Or just double-click `START.bat` on Windows — it handles everything.
 3. Files are automatically grouped by type (Movies, TV, Audiobooks, ROMs)
 4. Click **Match All** to auto-match with metadata
 5. Review the proposed names in the preview
-6. Click **Rename All** to execute
+6. Choose a file operation in Settings, then click the operation button to build the organized library
+
+> **Link behavior:** Local hard links require the source and output to be on the same filesystem. Symbolic links can cross filesystems but may require Windows Developer Mode. For RaiDrive/FTP-backed TrueNAS storage, SSH Hard Link mode maps the Windows path to its TrueNAS `/mnt/...` path and runs `ln` directly on the server using SSH key or agent authentication.
+
+### SSH hard links on TrueNAS SCALE / Linux
+
+Select **SSH Hard Link** under **Settings → File Operation**. Enter an SSH host (`user@server` or an SSH config alias), port, optional OpenSSH private-key path, and matching local/server roots. For example, `R:\Media` can map to `/mnt/pool/media`; both source and destination must be underneath that mapping and on the same server filesystem (the same ZFS dataset on TrueNAS).
+
+Before using **Test Connection**, establish a connection with your system SSH client, verify the server fingerprint, and authorize your public key on the server. Renamr requires an already trusted host and key/agent authentication; it does not collect passwords or accept unknown host keys. The connection test checks the remote directory, write access, and availability of `ln` without creating files.
+
+SSH mode requires Linux/GNU `ln` with `-T` support, as provided by TrueNAS SCALE. It refuses existing destinations and records the connection used for undo. Other SSH server platforms, including TrueNAS CORE, are not currently supported by this mode.
+
+Links share file contents: editing a linked file can change the data used by the torrent client. Keep seeding files read-only. Symbolic links also depend on the original path continuing to exist.
 
 ### ROM-Specific Workflow
 

@@ -4,6 +4,7 @@
   "description": "Free media file organizer — TV, Movies & Audiobooks",
   "main": "main.js",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
@@ -21,6 +22,7 @@
     ],
     "files": [
       "main.js",
+      "file-operations.js",
       "preload.js",
       "src/**/*",
       "assets/**/*",

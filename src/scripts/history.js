@@ -13,7 +13,7 @@ const History = {
       container.innerHTML = `
         <div class="empty-state">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <p>No rename history yet</p>
+          <p>No file-operation history yet</p>
         </div>
       `;
       return;
@@ -69,6 +69,7 @@ const History = {
     const history = await api.getStore('history') || [];
     const entry = history[index];
     if (!entry) return;
+    const isLinkEntry = entry.operation?.includes('link') || entry.operations.some(op => op.operation?.includes('link'));
 
     // Confirm before undoing
     const dateStr = new Date(entry.date).toLocaleDateString('en-US', {
@@ -79,10 +80,10 @@ const History = {
       this._undoResolve = resolve;
       showModal('Confirm Undo', `
         <p style="margin-bottom:8px;color:var(--text-secondary);">
-          Undo <strong>${entry.successCount}</strong> rename${entry.successCount !== 1 ? 's' : ''} from <strong>${dateStr}</strong>?
+          Undo <strong>${entry.successCount}</strong> ${isLinkEntry ? 'link' : 'rename'}${entry.successCount !== 1 ? 's' : ''} from <strong>${dateStr}</strong>?
         </p>
         <p style="margin-bottom:16px;font-size:12px;color:var(--text-tertiary);">
-          Files will be renamed back to their original names.
+          ${isLinkEntry ? 'Created links will be removed. Original files will not be changed.' : 'Files will be renamed back to their original names.'}
         </p>
         <div style="display:flex;gap:8px;justify-content:flex-end;">
           <button class="btn btn-secondary" onclick="History._resolveUndo(false)">Cancel</button>
@@ -108,11 +109,11 @@ const History = {
     const success = results.filter(r => r.success).length;
 
     if (success === 0) {
-      showToast('Undo failed — files may have already been moved or deleted', 'error');
+      showToast(`Undo failed — ${isLinkEntry ? 'links may have changed or already been removed' : 'files may have already been moved or deleted'}`, 'error');
       return;
     }
 
-    showToast(`Undid ${success} of ${entry.operations.length} renames`, 'success');
+    showToast(`Undid ${success} of ${entry.operations.length} ${isLinkEntry ? 'links' : 'renames'}`, 'success');
 
     // Remove from history only after at least a partial success
     history.splice(index, 1);

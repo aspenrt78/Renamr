@@ -131,7 +131,7 @@
                 <span class="panel-label">New Names</span>
                 <button class="center-action-btn accent" onclick="Organize.renameAll()" id="organize-rename-btn" disabled>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 15 2 2 4-4"/><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
-                  <span>Rename</span>
+                  <span id="organize-operation-label">Rename &amp; Move</span>
                 </button>
                 <button class="center-action-btn" onclick="Audiobooks.embedAllTags()" id="audiobooks-embed-btn" title="Write metadata into audio files for Plex" style="display:none">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -384,7 +384,7 @@
       <!-- ══════════ HISTORY ══════════ -->
       <div class="page" id="page-history">
         <div class="page-topbar"><div class="topbar-left"><h2 class="page-title">History</h2><span class="topbar-stats">Review and undo past operations</span></div><div class="topbar-right"><button class="btn btn-ghost" onclick="History.clearAll()">Clear History</button></div></div>
-        <div id="history-list" class="history-list"><div class="empty-state"><p>No rename history yet</p></div></div>
+        <div id="history-list" class="history-list"><div class="empty-state"><p>No file-operation history yet</p></div></div>
       </div>
 
       <!-- ══════════ SETTINGS ══════════ -->
@@ -412,28 +412,53 @@
 
           <!-- Output Directories -->
           <div class="config-card">
+            <h3>File Operation</h3>
+            <p class="setting-desc">Choose how Renamr creates the organized library. Rename &amp; Move preserves the original behavior and remains the default.</p>
+            <select id="settings-operation-mode" class="input" onchange="Settings.saveFileOperationMode()">
+              <option value="move">Rename &amp; Move</option>
+              <option value="hardlink">Hard Link (same filesystem)</option>
+              <option value="symlink">Symbolic Link</option>
+              <option value="ssh-hardlink">SSH Hard Link (TrueNAS/server)</option>
+            </select>
+            <p id="settings-operation-help" class="setting-desc" style="margin-top:8px;margin-bottom:0;"></p>
+          </div>
+
+          <div class="config-card" id="settings-ssh-card" style="display:none;">
+            <h3>SSH Hard Links</h3>
+            <p class="setting-desc">Uses your system SSH client and key/agent authentication. Renamr does not store a NAS password.</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="input-row"><input type="text" id="settings-ssh-host" class="input" placeholder="user@truenas or SSH config alias" /><input type="number" id="settings-ssh-port" class="input" value="22" min="1" max="65535" style="max-width:90px;" /></div>
+              <div class="input-row"><input type="text" id="settings-ssh-identity" class="input" placeholder="Private key path (optional; uses SSH agent/config by default)" readonly /><button class="btn btn-secondary" onclick="Settings.selectSshIdentity()">Browse</button><button class="btn btn-secondary" onclick="Settings.clearSshIdentity()">Clear</button></div>
+              <div><div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">Windows/RaiDrive root</div><div class="input-row"><input type="text" id="settings-ssh-local-root" class="input" placeholder="R:\Movies" readonly /><button class="btn btn-secondary" onclick="Settings.selectSshLocalRoot()">Browse</button></div></div>
+              <div><div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">Matching TrueNAS root</div><input type="text" id="settings-ssh-remote-root" class="input" placeholder="/mnt/tank/media/Movies" /></div>
+              <div class="input-row"><button class="btn btn-primary" onclick="Settings.saveSshSettings()">Save SSH Settings</button><button class="btn btn-secondary" onclick="Settings.testSshConnection()">Test Connection</button></div>
+              <div id="ssh-connection-status" class="key-status"></div>
+            </div>
+          </div>
+
+          <div class="config-card">
             <h3>Output Directories</h3>
-            <p class="setting-desc">Where renamed files are placed for each media type. Leave empty to rename in place. Type-specific paths take priority over the global fallback.</p>
+            <p class="setting-desc">Where organized files or links are placed for each media type. Type-specific paths take priority over the global fallback.</p>
             <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
               <div>
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">Movies</div>
-                <div class="input-row"><input type="text" id="settings-movie-output-dir" class="input" placeholder="Rename in place" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('movie')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('movie')">Clear</button></div>
+                <div class="input-row"><input type="text" id="settings-movie-output-dir" class="input" placeholder="Use source location" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('movie')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('movie')">Clear</button></div>
               </div>
               <div>
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">TV Shows</div>
-                <div class="input-row"><input type="text" id="settings-tv-output-dir" class="input" placeholder="Rename in place" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('tv')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('tv')">Clear</button></div>
+                <div class="input-row"><input type="text" id="settings-tv-output-dir" class="input" placeholder="Use source location" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('tv')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('tv')">Clear</button></div>
               </div>
               <div>
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">Audiobooks</div>
-                <div class="input-row"><input type="text" id="settings-audiobook-output-dir" class="input" placeholder="Rename in place" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('audiobook')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('audiobook')">Clear</button></div>
+                <div class="input-row"><input type="text" id="settings-audiobook-output-dir" class="input" placeholder="Use source location" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('audiobook')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('audiobook')">Clear</button></div>
               </div>
               <div>
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">ROMs</div>
-                <div class="input-row"><input type="text" id="settings-rom-output-dir" class="input" placeholder="Rename in place" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('rom')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('rom')">Clear</button></div>
+                <div class="input-row"><input type="text" id="settings-rom-output-dir" class="input" placeholder="Use source location" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('rom')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('rom')">Clear</button></div>
               </div>
               <div style="padding-top:10px;border-top:1px solid var(--border-subtle);">
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;">Global Fallback <span style="font-size:10.5px;font-weight:400;color:var(--text-tertiary);">(used when no type-specific path is set)</span></div>
-                <div class="input-row"><input type="text" id="settings-output-dir" class="input" placeholder="Rename files in place" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('global')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('global')">Clear</button></div>
+                <div class="input-row"><input type="text" id="settings-output-dir" class="input" placeholder="Use source location" readonly /><button class="btn btn-secondary" onclick="Settings.selectOutputDir('global')">Browse</button><button class="btn btn-secondary" onclick="Settings.clearOutputDir('global')">Clear</button></div>
               </div>
             </div>
           </div>

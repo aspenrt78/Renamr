@@ -16,8 +16,9 @@ contextBridge.exposeInMainWorld('api', {
   scanFiles: (dir, type) => ipcRenderer.invoke('files:scan', dir, type),
   readAudioMeta: (path) => ipcRenderer.invoke('files:readAudioMeta', path),
   parseFilename: (filename) => ipcRenderer.invoke('files:parseFilename', filename),
-  renameFiles: (ops) => ipcRenderer.invoke('files:rename', ops),
+  organizeFiles: (ops) => ipcRenderer.invoke('files:organize', ops),
   undoRename: (ops) => ipcRenderer.invoke('files:undo', ops),
+  testSsh: () => ipcRenderer.invoke('ssh:test'),
   showInFolder: (path) => ipcRenderer.invoke('shell:showInFolder', path),
 
   // TMDB

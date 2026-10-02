@@ -323,12 +323,12 @@ const TV = {
 
   async renameAll() {
     const ops = this.files.filter(f => f.selected && f.match && f.newPath).map(f => ({ oldPath: f.path, newPath: f.newPath }));
-    if (ops.length === 0) { showToast('No matched files to rename', 'error'); return; }
-    const results = await api.renameFiles(ops);
+    if (ops.length === 0) { showToast('No matched files to process', 'error'); return; }
+    const results = await api.organizeFiles(ops);
     const success = results.filter(r => r.success).length;
     for (const file of this.files) { const res = results.find(r => r.source === file.path); if (res) { file.status = res.success ? 'done' : 'error'; if (res.success) file.path = res.target; } }
     this.render();
-    showToast(`Renamed ${success} files`, success > 0 ? 'success' : 'error');
+    showToast(`${Settings.completedVerb()} ${success} files`, success > 0 ? 'success' : 'error');
   },
 
   showSearch(index) {

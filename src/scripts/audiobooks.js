@@ -762,8 +762,8 @@ const Audiobooks = {
     const ops = this.files
       .filter(f => f.selected && f.status === 'matched' && f.newPath)
       .map(f => ({ oldPath: f.path, newPath: f.newPath }));
-    if (ops.length === 0) { showToast('No matched files to rename', 'error'); return; }
-    const results = await api.renameFiles(ops);
+    if (ops.length === 0) { showToast('No matched files to process', 'error'); return; }
+    const results = await api.organizeFiles(ops);
     const success = results.filter(r => r.success).length;
     const fail = results.filter(r => !r.success).length;
     for (const file of this.files) {
@@ -774,11 +774,12 @@ const Audiobooks = {
     if (fail > 0) {
       const firstError = results.find(r => !r.success);
       const errMsg = firstError?.error || 'Unknown error';
-      showToast(`${fail} files failed to rename: ${errMsg}`, 'error');
-      console.error('Rename failures:', results.filter(r => !r.success));
+      showToast(`${fail} files failed: ${errMsg}`, 'error');
+      console.error('File-operation failures:', results.filter(r => !r.success));
     }
     // Show embed tags button after successful rename
     if (success > 0) {
+      showToast(`${Settings.completedVerb()} ${success} files${fail > 0 ? `, ${fail} failed` : ''}`, 'success');
       const embedBtn = document.getElementById('audiobooks-embed-btn');
       if (embedBtn) embedBtn.style.display = '';
     }

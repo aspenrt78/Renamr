@@ -7,6 +7,13 @@ const fastGlob = require('fast-glob');
 const axios = require('axios');
 const AdmZip = require('adm-zip');
 const Store = require('electron-store');
+const {
+  createLocalLink,
+  undoLocalLink,
+  testSshConnection,
+  createSshHardLink,
+  undoSshHardLink
+} = require('./file-operations');
 
 const store = new Store({
   defaults: {
@@ -25,6 +32,12 @@ const store = new Store({
     tvOutputDirectory: '',
     audiobookOutputDirectory: '',
     romOutputDirectory: '',
+    fileOperationMode: 'move',
+    sshHost: '',
+    sshPort: 22,
+    sshIdentityFile: '',
+    sshLocalRoot: '',
+    sshRemoteRoot: '',
     theme: 'dark',
     history: [],
     igdbClientId: '',
@@ -836,7 +849,66 @@ function extractSeriesFromGoogleBook(volumeInfo) {
 }
 
 // ── File Rename / Move Operations ────────────────────────────────
-ipcMain.handle('files:rename', async (_, operations) => {
+ipcMain.handle('files:organize', async (_, operations) => {
+  const results = [];
+  const mode = store.get('fileOperationMode') || 'move';
+  if (mode === 'move') return moveFiles(operations);
+
+  const sshConfig = {
+    host: store.get('sshHost') || '',
+    port: store.get('sshPort') || 22,
+    identityFile: store.get('sshIdentityFile') || '',
+    localRoot: store.get('sshLocalRoot') || '',
+    remoteRoot: store.get('sshRemoteRoot') || ''
+  };
+
+  console.log(`\n=== LINK: ${operations.length} operations ===`);
+
+  for (const op of operations) {
+    try {
+      if (!op.oldPath || !op.newPath) {
+        results.push({
+          source: op.oldPath,
+          target: op.newPath,
+          success: false,
+          operation: 'link',
+          error: 'Missing path'
+        });
+        continue;
+      }
+
+      const result = mode === 'ssh-hardlink'
+        ? await createSshHardLink(op.oldPath, op.newPath, sshConfig)
+        : await createLocalLink(op.oldPath, op.newPath, mode);
+      console.log(`Completed ${mode}:`, op.oldPath, '->', op.newPath);
+      results.push(result);
+    } catch (err) {
+      console.error('Link failed:', op.oldPath, '->', op.newPath, err.message);
+      results.push({
+        source: op.oldPath,
+        target: op.newPath,
+        success: false,
+        operation: 'link',
+        error: err.message
+      });
+    }
+  }
+
+  const history = store.get('history') || [];
+  history.unshift({
+    date: new Date().toISOString(),
+    operation: mode,
+    operations: results,
+    count: results.length,
+    successCount: results.filter(result => result.success).length
+  });
+  store.set('history', history.slice(0, 100));
+
+  return results;
+});
+
+// Original rename/move implementation, selected through File Operation settings.
+async function moveFiles(operations) {
   const results = [];
   const dirsToClean = new Set();
 
@@ -1055,6 +1127,7 @@ ipcMain.handle('files:rename', async (_, operations) => {
   const history = store.get('history') || [];
   history.unshift({
     date: new Date().toISOString(),
+    operation: 'move',
     operations: results,
     count: results.length,
     successCount: results.filter(r => r.success).length
@@ -1062,22 +1135,52 @@ ipcMain.handle('files:rename', async (_, operations) => {
   store.set('history', history.slice(0, 100));
 
   return results;
-});
+}
 
 ipcMain.handle('files:undo', async (_, operations) => {
   const results = [];
   for (const op of operations) {
     if (!op.success) continue;
     try {
-      const sourceDir = path.dirname(op.source);
-      await fs.promises.mkdir(sourceDir, { recursive: true, mode: 0o777 });
-      await fs.promises.rename(op.target, op.source);
-      results.push({ success: true, restored: op.source });
+      if (op.operation === 'ssh-link') {
+        const sshConfig = op.sshConnection || {
+          host: store.get('sshHost') || '',
+          port: store.get('sshPort') || 22,
+          identityFile: store.get('sshIdentityFile') || '',
+          localRoot: store.get('sshLocalRoot') || '',
+          remoteRoot: store.get('sshRemoteRoot') || ''
+        };
+        results.push(await undoSshHardLink(op, sshConfig));
+      } else if (op.operation === 'noop' || op.operation === 'link') {
+        results.push(await undoLocalLink(op));
+      } else {
+        // Backward compatibility for rename history from older app versions.
+        const sourceDir = path.dirname(op.source);
+        await fs.promises.mkdir(sourceDir, { recursive: true, mode: 0o777 });
+        await fs.promises.rename(op.target, op.source);
+        results.push({ success: true, restored: op.source });
+      }
     } catch (err) {
       results.push({ success: false, error: err.message });
     }
   }
   return results;
+});
+
+ipcMain.handle('ssh:test', async () => {
+  const config = {
+    host: store.get('sshHost') || '',
+    port: store.get('sshPort') || 22,
+    identityFile: store.get('sshIdentityFile') || '',
+    localRoot: store.get('sshLocalRoot') || '',
+    remoteRoot: store.get('sshRemoteRoot') || ''
+  };
+  try {
+    const success = await testSshConnection(config);
+    return { success };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 // ── Settings Store ───────────────────────────────────────────────

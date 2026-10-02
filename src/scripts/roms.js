@@ -563,10 +563,10 @@ const Roms = {
       .filter(f => f.selected && f.match && f.newPath)
       .map(f => ({ oldPath: f.path, newPath: f.newPath }));
     if (ops.length === 0) {
-      showToast('No matched ROMs to rename', 'error');
+      showToast('No matched ROMs to process', 'error');
       return;
     }
-    const results     = await api.renameFiles(ops);
+    const results     = await api.organizeFiles(ops);
     const successCount = results.filter(r => r.success).length;
     const failCount    = results.filter(r => !r.success).length;
     for (const file of this.files) {
@@ -578,7 +578,7 @@ const Roms = {
     }
     this.render();
     showToast(
-      `Renamed ${successCount} ROM${successCount !== 1 ? 's' : ''}${failCount > 0 ? `, ${failCount} failed` : ''}`,
+      `${Settings.completedVerb()} ${successCount} ROM${successCount !== 1 ? 's' : ''}${failCount > 0 ? `, ${failCount} failed` : ''}`,
       successCount > 0 ? 'success' : 'error'
     );
   },
@@ -738,8 +738,8 @@ const Roms = {
           statusHtml  = '<span class="file-row-status status-matched">matched</span>';
         } else if (f.status === 'done') {
           nameClass   = 'done';
-          displayName = f.newName || 'renamed';
-          statusHtml  = '<span class="file-row-status status-done">done</span>';
+          displayName = f.newName || Settings.doneLabel();
+          statusHtml  = `<span class="file-row-status status-done">${Settings.doneLabel()}</span>`;
         } else if (f.status === 'error') {
           nameClass   = 'error-name';
           displayName = 'no match found';

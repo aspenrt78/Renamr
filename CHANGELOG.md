@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### File Operations
+
+- Added selectable Rename & Move, Hard Link, Symbolic Link, and SSH Hard Link modes. Rename & Move remains the default.
+- Added server-side hard-link creation for TrueNAS and other SSH-accessible storage, including Windows-to-server path mapping and key/agent authentication.
+- Link-aware history undo verifies link identity before removal and never removes the original source file.
+- Added automated tests for local links, safe undo, path mapping, shell quoting, and SSH command construction.
+
 ## v1.1.0 — ROM Renamer
 
 ### New Features

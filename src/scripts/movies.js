@@ -370,8 +370,8 @@ const Movies = {
     const ops = this.files
       .filter(f => f.selected && f.match && f.newPath)
       .map(f => ({ oldPath: f.path, newPath: f.newPath }));
-    if (ops.length === 0) { showToast('No matched files to rename', 'error'); return; }
-    const results = await api.renameFiles(ops);
+    if (ops.length === 0) { showToast('No matched files to process', 'error'); return; }
+    const results = await api.organizeFiles(ops);
     const success = results.filter(r => r.success).length;
     const fail = results.filter(r => !r.success).length;
     for (const file of this.files) {
@@ -379,7 +379,7 @@ const Movies = {
       if (res) { file.status = res.success ? 'done' : 'error'; if (res.success) file.path = res.target; }
     }
     this.render();
-    showToast(`Renamed ${success} files${fail > 0 ? `, ${fail} failed` : ''}`, success > 0 ? 'success' : 'error');
+    showToast(`${Settings.completedVerb()} ${success} files${fail > 0 ? `, ${fail} failed` : ''}`, success > 0 ? 'success' : 'error');
   },
 
   removeFile(index) { this.files.splice(index, 1); this.render(); },
@@ -432,7 +432,7 @@ const Movies = {
       let nc = 'pending', dn = 'waiting for match...', sh = '<span class="file-row-status status-pending">pending</span>';
       if (f.status === 'searching') { dn = 'searching...'; sh = '<span class="file-row-status status-searching"><span class="spinner"></span></span>'; }
       else if (f.status === 'matched' && f.newName) { nc = 'matched'; dn = f.newName; sh = '<span class="file-row-status status-matched">matched</span>'; }
-      else if (f.status === 'done') { nc = 'done'; dn = f.newName || 'renamed'; sh = '<span class="file-row-status status-done">done</span>'; }
+      else if (f.status === 'done') { nc = 'done'; dn = f.newName || Settings.doneLabel(); sh = `<span class="file-row-status status-done">${Settings.doneLabel()}</span>`; }
       else if (f.status === 'error') { nc = 'error-name'; dn = 'no match found'; sh = '<span class="file-row-status status-error">error</span>'; }
       return `<div class="file-row ${f.status === 'done' ? 'done' : ''} ${f.status === 'error' ? 'error-row' : ''}">
         <span class="file-row-newname ${nc}" title="${escapeHtml(f.newPath || '')}">${escapeHtml(dn)}</span>${sh}</div>`;

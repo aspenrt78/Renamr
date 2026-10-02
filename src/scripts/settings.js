@@ -3,10 +3,38 @@
 // ═══════════════════════════════════════════════════════════════════
 
 const Settings = {
+  operationMode: 'move',
+
+  _operationMeta: {
+    move: { button: 'Rename & Move', done: 'Moved', status: 'done', help: 'Renames or moves files using the existing behavior.' },
+    hardlink: { button: 'Create Hard Links', done: 'Linked', status: 'linked', help: 'Uses no duplicate file data, but source and output must be on the same filesystem.' },
+    symlink: { button: 'Create Symbolic Links', done: 'Linked', status: 'linked', help: 'Can cross filesystems. Windows may require Developer Mode or administrator privileges.' },
+    'ssh-hardlink': { button: 'Create SSH Links', done: 'Linked', status: 'linked', help: 'Creates hard links directly on TrueNAS over SSH without transferring movie data.' }
+  },
+
+  completedVerb() { return (this._operationMeta[this.operationMode] || this._operationMeta.move).done; },
+  doneLabel() { return (this._operationMeta[this.operationMode] || this._operationMeta.move).status; },
+
   async init() {
     const tmdbKey = await api.getStore('tmdbApiKey') || '';
     const omdbKey = await api.getStore('omdbApiKey') || '';
     const outputDir = await api.getStore('outputDirectory') || '';
+    this.operationMode = await api.getStore('fileOperationMode') || 'move';
+    const operationEl = document.getElementById('settings-operation-mode');
+    if (operationEl) operationEl.value = this.operationMode;
+    this.applyOperationModeUI();
+
+    const sshFields = {
+      'settings-ssh-host': ['sshHost', ''],
+      'settings-ssh-port': ['sshPort', 22],
+      'settings-ssh-identity': ['sshIdentityFile', ''],
+      'settings-ssh-local-root': ['sshLocalRoot', ''],
+      'settings-ssh-remote-root': ['sshRemoteRoot', '']
+    };
+    for (const [id, [key, fallback]] of Object.entries(sshFields)) {
+      const el = document.getElementById(id);
+      if (el) el.value = await api.getStore(key) || fallback;
+    }
 
     if (tmdbKey) {
       document.getElementById('settings-tmdb-key').value = tmdbKey;
@@ -54,6 +82,59 @@ const Settings = {
 
     const esDeEl = document.getElementById('settings-rom-esde');
     if (esDeEl) esDeEl.checked = await api.getStore('romEsDeNames') || false;
+  },
+
+  applyOperationModeUI() {
+    const meta = this._operationMeta[this.operationMode] || this._operationMeta.move;
+    const label = document.getElementById('organize-operation-label');
+    const help = document.getElementById('settings-operation-help');
+    const sshCard = document.getElementById('settings-ssh-card');
+    if (label) label.textContent = meta.button;
+    if (help) help.textContent = meta.help;
+    if (sshCard) sshCard.style.display = this.operationMode === 'ssh-hardlink' ? '' : 'none';
+  },
+
+  async saveFileOperationMode() {
+    this.operationMode = document.getElementById('settings-operation-mode')?.value || 'move';
+    await api.setStore('fileOperationMode', this.operationMode);
+    this.applyOperationModeUI();
+    showToast(`File operation set to ${(this._operationMeta[this.operationMode] || this._operationMeta.move).button}`, 'success');
+  },
+
+  async selectSshIdentity() {
+    const files = await api.openFiles([{ name: 'SSH private key', extensions: ['pem', 'key', 'ppk', '*'] }]);
+    if (files?.[0]) document.getElementById('settings-ssh-identity').value = files[0];
+  },
+
+  clearSshIdentity() {
+    document.getElementById('settings-ssh-identity').value = '';
+  },
+
+  async selectSshLocalRoot() {
+    const directory = await api.openDirectory();
+    if (directory) document.getElementById('settings-ssh-local-root').value = directory;
+  },
+
+  async saveSshSettings(showConfirmation = true) {
+    const values = {
+      sshHost: document.getElementById('settings-ssh-host').value.trim(),
+      sshPort: Number(document.getElementById('settings-ssh-port').value) || 22,
+      sshIdentityFile: document.getElementById('settings-ssh-identity').value.trim(),
+      sshLocalRoot: document.getElementById('settings-ssh-local-root').value.trim(),
+      sshRemoteRoot: document.getElementById('settings-ssh-remote-root').value.trim()
+    };
+    for (const [key, value] of Object.entries(values)) await api.setStore(key, value);
+    if (showConfirmation) showToast('SSH settings saved', 'success');
+  },
+
+  async testSshConnection() {
+    const status = document.getElementById('ssh-connection-status');
+    await this.saveSshSettings(false);
+    status.textContent = 'Testing read-only SSH connection...';
+    status.className = 'key-status';
+    const result = await api.testSsh();
+    status.textContent = result.success ? '✓ SSH connection succeeded' : `✗ ${result.error || 'SSH connection failed'}`;
+    status.className = `key-status ${result.success ? 'valid' : 'invalid'}`;
   },
 
   async saveApiKey(provider) {
